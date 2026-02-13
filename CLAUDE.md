@@ -29,6 +29,4 @@ ccp <project-name>            # Prompts for type if project is new
 
 ## Configuration
 
-The script uses two base directories (hardcoded):
-- **Personal**: `~/personal/projects/`
-- **Work**: `~/work/projects/`
+The script uses two base directories with defaults of `~/personal` and `~/work`. Override them by setting `PERSONAL_DIR` and `WORK_DIR` in a `.env` file next to the script, or in `~/.ccp.env`. The `.env` file is gitignored.

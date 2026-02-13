@@ -7,8 +7,15 @@
 #   -finder Open project directory in Finder
 #   -cd     Change to project directory (use with: cd $(ccp -cd ...))
 
-PERSONAL_DIR="$HOME/personal/projects"
-WORK_DIR="$HOME/work/projects"
+# Defaults (override in .env next to this script, or ~/.ccp.env)
+PERSONAL_DIR="$HOME/personal"
+WORK_DIR="$HOME/work"
+
+# Load .env overrides
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env"
+[ -f "$HOME/.ccp.env" ] && source "$HOME/.ccp.env"
+
 HISTORY_FILE="$HOME/.ccp_history"
 MAX_RECENT=5
 
