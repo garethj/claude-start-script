@@ -26,6 +26,15 @@ YELLOW='\033[0;33m'
 DIM='\033[2m'
 NC='\033[0m' # No Color
 
+# Colorize project prefix: [P] in blue, [W] in magenta
+# Uses $'...' for real ANSI bytes (sed doesn't interpret \033 notation)
+colorize_prefix() {
+    local blue_b=$'\033[0;34m\033[1m'
+    local mag_b=$'\033[0;35m\033[1m'
+    local nc=$'\033[0m'
+    sed -e "s/\[P\]/${blue_b}[P]${nc}/g" -e "s/\[W\]/${mag_b}[W]${nc}/g"
+}
+
 # Record project access in history file
 record_access() {
     local type="$1"
@@ -102,17 +111,23 @@ build_project_list() {
     all_projects=$(list_projects "$filter" | sort -t']' -k2)
 
     if [ -n "$recent" ]; then
+        # Remove recent entries from the full list to avoid duplicates
+        local filtered_projects="$all_projects"
+        while IFS= read -r entry; do
+            filtered_projects=$(echo "$filtered_projects" | grep -vxF "$entry")
+        done <<< "$recent"
+
         if [ "$use_markers" = "markers" ]; then
             # Add bullet marker to recent items for non-fzf display
-            echo "$recent" | sed 's/^/● /'
-            echo "$all_projects"
+            echo "$recent" | colorize_prefix | sed 's/^/● /'
+            echo "$filtered_projects" | colorize_prefix
         else
-            echo "$recent"
+            echo "$recent" | colorize_prefix
             echo "─────────────"
-            echo "$all_projects"
+            echo "$filtered_projects" | colorize_prefix
         fi
     else
-        echo "$all_projects"
+        echo "$all_projects" | colorize_prefix
     fi
 }
 
@@ -129,7 +144,7 @@ select_project() {
 
     local selected
     if command -v fzf &> /dev/null; then
-        selected=$(echo "$projects" | fzf --prompt="Select project: " --height=40% --reverse --no-sort \
+        selected=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
             --header="Recent projects:" \
             --color="header:dim")
     else
@@ -149,6 +164,9 @@ select_project() {
             fi
         done
     fi
+
+    # Strip ANSI escape codes for parsing
+    selected=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g')
 
     # Handle separator selection or empty
     if [ -z "$selected" ] || [[ "$selected" == ─* ]]; then
