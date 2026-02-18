@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 HISTORY_FILE="$HOME/.ccp_history"
 MAX_RECENT=5
+DASHBOARD_MODE=false
 
 # Colors
 CYAN='\033[0;36m'
@@ -33,6 +34,33 @@ colorize_prefix() {
     local mag_b=$'\033[0;35m\033[1m'
     local nc=$'\033[0m'
     sed -e "s/\[P\]/${blue_b}[P]${nc}/g" -e "s/\[W\]/${mag_b}[W]${nc}/g"
+}
+
+# Open a command in a new iTerm2 tab
+open_in_iterm_tab() {
+    local cmd="$1"
+    osascript - "$cmd" <<'APPLESCRIPT'
+on run argv
+    set cmd to item 1 of argv
+    tell application "iTerm2"
+        tell current window
+            create tab with default profile
+            tell current session of current tab
+                write text cmd
+            end tell
+        end tell
+    end tell
+end run
+APPLESCRIPT
+}
+
+# Show dashboard header
+show_dashboard_header() {
+    echo -e "${CYAN}━━━ ccp ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  Claude Code Project Launcher"
+    echo -e "${DIM}  Press Esc to quit${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 }
 
 # Record project access in history file
@@ -224,104 +252,157 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# If no project name, show interactive menu
-if [ -z "$PROJECT_NAME" ]; then
-    if ! select_project "$TYPE"; then
-        exit 1
+# Resolve project path and execute action
+# Sets PROJECT_PATH, EXISTING_PROJECT and performs the action
+resolve_and_execute() {
+    local project_name="$1"
+    local type="$2"
+    local action="$3"
+    local chrome_flag="$4"
+    local dashboard="$5"  # "true" if running from dashboard loop
+
+    # Interactive type selection if no type specified
+    if [ -z "$type" ]; then
+        local local_personal="$PERSONAL_DIR/$project_name"
+        local local_work="$WORK_DIR/$project_name"
+        local exists_personal=false
+        local exists_work=false
+        [ -d "$local_personal" ] && exists_personal=true
+        [ -d "$local_work" ] && exists_work=true
+
+        if $exists_personal && ! $exists_work; then
+            echo -e "${GREEN}Found existing personal project:${NC} $local_personal"
+            echo ""
+            echo "  [P] Personal  ~/personal/projects/ (exists - default)"
+            echo "  [w] Work      ~/work/projects/"
+            echo ""
+            read -p "Choice (P/w): " choice
+            case "$choice" in
+                w|W) type="work" ;;
+                *) type="personal" ;;
+            esac
+        elif $exists_work && ! $exists_personal; then
+            echo -e "${GREEN}Found existing work project:${NC} $local_work"
+            echo ""
+            echo "  [p] Personal  ~/personal/projects/"
+            echo "  [W] Work      ~/work/projects/ (exists - default)"
+            echo ""
+            read -p "Choice (p/W): " choice
+            case "$choice" in
+                p|P) type="personal" ;;
+                *) type="work" ;;
+            esac
+        elif $exists_personal && $exists_work; then
+            echo -e "${GREEN}Project exists in both locations:${NC}"
+            echo -e "  Personal: $local_personal"
+            echo -e "  Work:     $local_work"
+            echo ""
+            echo "  [p] Personal  ~/personal/projects/"
+            echo "  [W] Work      ~/work/projects/ (default)"
+            echo ""
+            read -p "Choice (p/W): " choice
+            case "$choice" in
+                p|P) type="personal" ;;
+                *) type="work" ;;
+            esac
+        else
+            echo -e "${CYAN}Select project type for '${project_name}':${NC}"
+            echo ""
+            echo "  [p] Personal  ~/personal/projects/"
+            echo "  [W] Work      ~/work/projects/ (default)"
+            echo ""
+            read -p "Choice (p/W): " choice
+            case "$choice" in
+                p|P) type="personal" ;;
+                *) type="work" ;;
+            esac
+        fi
     fi
-fi
 
-# Interactive selection if no type specified
-if [ -z "$TYPE" ]; then
-    local_personal="$PERSONAL_DIR/$PROJECT_NAME"
-    local_work="$WORK_DIR/$PROJECT_NAME"
-    exists_personal=false
-    exists_work=false
-    [ -d "$local_personal" ] && exists_personal=true
-    [ -d "$local_work" ] && exists_work=true
-
-    if $exists_personal && ! $exists_work; then
-        echo -e "${GREEN}Found existing personal project:${NC} $local_personal"
-        echo ""
-        echo "  [P] Personal  ~/personal/projects/ (exists - default)"
-        echo "  [w] Work      ~/work/projects/"
-        echo ""
-        read -p "Choice (P/w): " choice
-        case "$choice" in
-            w|W) TYPE="work" ;;
-            *) TYPE="personal" ;;
-        esac
-    elif $exists_work && ! $exists_personal; then
-        echo -e "${GREEN}Found existing work project:${NC} $local_work"
-        echo ""
-        echo "  [p] Personal  ~/personal/projects/"
-        echo "  [W] Work      ~/work/projects/ (exists - default)"
-        echo ""
-        read -p "Choice (p/W): " choice
-        case "$choice" in
-            p|P) TYPE="personal" ;;
-            *) TYPE="work" ;;
-        esac
-    elif $exists_personal && $exists_work; then
-        echo -e "${GREEN}Project exists in both locations:${NC}"
-        echo -e "  Personal: $local_personal"
-        echo -e "  Work:     $local_work"
-        echo ""
-        echo "  [p] Personal  ~/personal/projects/"
-        echo "  [W] Work      ~/work/projects/ (default)"
-        echo ""
-        read -p "Choice (p/W): " choice
-        case "$choice" in
-            p|P) TYPE="personal" ;;
-            *) TYPE="work" ;;
-        esac
+    # Set base directory
+    local base_dir
+    if [ "$type" = "personal" ]; then
+        base_dir="$PERSONAL_DIR"
     else
-        echo -e "${CYAN}Select project type for '${PROJECT_NAME}':${NC}"
-        echo ""
-        echo "  [p] Personal  ~/personal/projects/"
-        echo "  [W] Work      ~/work/projects/ (default)"
-        echo ""
-        read -p "Choice (p/W): " choice
-        case "$choice" in
-            p|P) TYPE="personal" ;;
-            *) TYPE="work" ;;
-        esac
+        base_dir="$WORK_DIR"
     fi
+
+    local project_path="$base_dir/$project_name"
+
+    # Create directory if it doesn't exist
+    local existing_project=false
+    if [ -d "$project_path" ]; then
+        existing_project=true
+        [ "$action" != "cd" ] && echo -e "${GREEN}Opening existing project:${NC} $project_path"
+    else
+        [ "$action" != "cd" ] && echo -e "${YELLOW}Creating new project:${NC} $project_path"
+        mkdir -p "$project_path"
+    fi
+
+    # Perform the requested action
+    case "$action" in
+        finder)
+            echo -e "${GREEN}Opening in Finder:${NC} $project_path"
+            open "$project_path"
+            ;;
+        cd)
+            if [ "$dashboard" = "true" ]; then
+                echo -e "${DIM}Skipping -cd in dashboard mode${NC}"
+            else
+                echo "$project_path"
+                cd "$project_path"
+            fi
+            ;;
+        *)
+            record_access "$type" "$project_name"
+            local continue_flag=""
+            $existing_project && continue_flag="--continue"
+
+            if [ "$dashboard" = "true" ]; then
+                local cmd="cd $(printf '%q' "$project_path") && claude $continue_flag $chrome_flag"
+                if ! open_in_iterm_tab "$cmd"; then
+                    echo -e "${YELLOW}Failed to open iTerm2 tab. Is iTerm2 running?${NC}"
+                else
+                    echo -e "${GREEN}Launched in new tab:${NC} $project_name"
+                fi
+            else
+                cd "$project_path" && claude $continue_flag $chrome_flag
+            fi
+            ;;
+    esac
+}
+
+# If no project name, enter dashboard mode (persistent loop)
+if [ -z "$PROJECT_NAME" ]; then
+    DASHBOARD_MODE=true
+
+    # Save the original type filter (from -p/-w flags)
+    TYPE_FILTER="$TYPE"
+
+    # Clean exit on Ctrl-C
+    trap 'echo ""; echo -e "${DIM}Exiting ccp dashboard.${NC}"; exit 0' INT
+
+    while true; do
+        clear
+        show_dashboard_header
+
+        # select_project sets PROJECT_NAME and TYPE from the selection
+        if ! select_project "$TYPE_FILTER"; then
+            echo ""
+            echo -e "${DIM}Exiting ccp dashboard.${NC}"
+            break
+        fi
+
+        resolve_and_execute "$PROJECT_NAME" "$TYPE" "$ACTION" "$CHROME_FLAG" "true"
+
+        # Reset for next loop iteration
+        PROJECT_NAME=""
+        TYPE="$TYPE_FILTER"
+        # Brief pause so user can see the confirmation
+        sleep 1
+    done
+    exit 0
 fi
 
-# Set base directory
-if [ "$TYPE" = "personal" ]; then
-    BASE_DIR="$PERSONAL_DIR"
-else
-    BASE_DIR="$WORK_DIR"
-fi
-
-PROJECT_PATH="$BASE_DIR/$PROJECT_NAME"
-
-# Create directory if it doesn't exist
-EXISTING_PROJECT=false
-if [ -d "$PROJECT_PATH" ]; then
-    EXISTING_PROJECT=true
-    [ "$ACTION" != "cd" ] && echo -e "${GREEN}Opening existing project:${NC} $PROJECT_PATH"
-else
-    [ "$ACTION" != "cd" ] && echo -e "${YELLOW}Creating new project:${NC} $PROJECT_PATH"
-    mkdir -p "$PROJECT_PATH"
-fi
-
-# Perform the requested action
-case "$ACTION" in
-    finder)
-        echo -e "${GREEN}Opening in Finder:${NC} $PROJECT_PATH"
-        open "$PROJECT_PATH"
-        ;;
-    cd)
-        echo "$PROJECT_PATH"
-        cd "$PROJECT_PATH"
-        ;;
-    *)
-        record_access "$TYPE" "$PROJECT_NAME"
-        CONTINUE_FLAG=""
-        $EXISTING_PROJECT && CONTINUE_FLAG="--continue"
-        cd "$PROJECT_PATH" && claude $CONTINUE_FLAG $CHROME_FLAG
-        ;;
-esac
+# Direct invocation (project name given on command line) — unchanged behavior
+resolve_and_execute "$PROJECT_NAME" "$TYPE" "$ACTION" "$CHROME_FLAG" "false"
