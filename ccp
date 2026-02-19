@@ -175,9 +175,9 @@ select_project() {
     if command -v fzf &> /dev/null; then
         local fzf_out
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="enter: claude  |  alt-t: terminal  |  alt-o: finder" \
+            --header="enter: claude  |  T: terminal  |  F: finder" \
             --color="header:dim" \
-            --expect="alt-t,alt-o")
+            --expect="F,T")
         key_pressed=$(echo "$fzf_out" | head -1)
         selected=$(echo "$fzf_out" | tail -n +2)
     else
@@ -218,9 +218,9 @@ select_project() {
     fi
 
     # Set action based on key pressed in fzf
-    if [ "$key_pressed" = "alt-o" ]; then
+    if [ "$key_pressed" = "F" ]; then
         MENU_ACTION="finder"
-    elif [ "$key_pressed" = "alt-t" ]; then
+    elif [ "$key_pressed" = "T" ]; then
         MENU_ACTION="terminal"
     else
         MENU_ACTION="claude"
