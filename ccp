@@ -171,10 +171,15 @@ select_project() {
     fi
 
     local selected
+    local key_pressed=""
     if command -v fzf &> /dev/null; then
-        selected=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="Recent projects:" \
-            --color="header:dim")
+        local fzf_out
+        fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
+            --header="enter: claude  |  c: terminal  |  f: finder" \
+            --color="header:dim" \
+            --expect="f,c")
+        key_pressed=$(echo "$fzf_out" | head -1)
+        selected=$(echo "$fzf_out" | tail -n +2)
     else
         # Use markers for non-fzf display
         local projects_marked
@@ -211,6 +216,15 @@ select_project() {
     else
         TYPE="work"
     fi
+
+    # Set action based on key pressed in fzf
+    if [ "$key_pressed" = "f" ]; then
+        MENU_ACTION="finder"
+    elif [ "$key_pressed" = "c" ]; then
+        MENU_ACTION="terminal"
+    else
+        MENU_ACTION="claude"
+    fi
 }
 
 show_usage() {
@@ -235,7 +249,8 @@ show_usage() {
 PROJECT_NAME=""
 TYPE=""
 CHROME_FLAG=""
-ACTION="claude"  # default: launch claude. alternatives: "finder", "cd"
+ACTION="claude"  # default: launch claude. alternatives: "finder", "cd", "terminal"
+MENU_ACTION=""   # set by fzf key press: "claude", "finder", or "terminal"
 
 # Parse all arguments in any order
 while [ $# -gt 0 ]; do
@@ -345,6 +360,19 @@ resolve_and_execute() {
             echo -e "${GREEN}Opening in Finder:${NC} $project_path"
             open "$project_path"
             ;;
+        terminal)
+            record_access "$type" "$project_name"
+            if [ "$dashboard" = "true" ]; then
+                local cmd="cd $(printf '%q' "$project_path")"
+                if ! open_in_iterm_tab "$cmd"; then
+                    echo -e "${YELLOW}Failed to open iTerm2 tab. Is iTerm2 running?${NC}"
+                else
+                    echo -e "${GREEN}Terminal tab opened:${NC} $project_name"
+                fi
+            else
+                cd "$project_path"
+            fi
+            ;;
         cd)
             if [ "$dashboard" = "true" ]; then
                 echo -e "${DIM}Skipping -cd in dashboard mode${NC}"
@@ -393,11 +421,18 @@ if [ -z "$PROJECT_NAME" ]; then
             break
         fi
 
-        resolve_and_execute "$PROJECT_NAME" "$TYPE" "$ACTION" "$CHROME_FLAG" "true"
+        # Use menu action (from fzf key press) if in default claude mode
+        effective_action="$ACTION"
+        if [ "$ACTION" = "claude" ] && [ -n "$MENU_ACTION" ]; then
+            effective_action="$MENU_ACTION"
+        fi
+
+        resolve_and_execute "$PROJECT_NAME" "$TYPE" "$effective_action" "$CHROME_FLAG" "true"
 
         # Reset for next loop iteration
         PROJECT_NAME=""
         TYPE="$TYPE_FILTER"
+        MENU_ACTION=""
         # Brief pause so user can see the confirmation
         sleep 1
     done
