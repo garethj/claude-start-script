@@ -288,8 +288,8 @@ resolve_and_execute() {
         if $exists_personal && ! $exists_work; then
             echo -e "${GREEN}Found existing personal project:${NC} $local_personal"
             echo ""
-            echo "  [P] Personal  ~/personal/projects/ (exists - default)"
-            echo "  [w] Work      ~/work/projects/"
+            echo "  [P] Personal  $PERSONAL_DIR (exists - default)"
+            echo "  [w] Work      $WORK_DIR"
             echo ""
             read -p "Choice (P/w): " choice
             case "$choice" in
@@ -299,8 +299,8 @@ resolve_and_execute() {
         elif $exists_work && ! $exists_personal; then
             echo -e "${GREEN}Found existing work project:${NC} $local_work"
             echo ""
-            echo "  [p] Personal  ~/personal/projects/"
-            echo "  [W] Work      ~/work/projects/ (exists - default)"
+            echo "  [p] Personal  $PERSONAL_DIR"
+            echo "  [W] Work      $WORK_DIR (exists - default)"
             echo ""
             read -p "Choice (p/W): " choice
             case "$choice" in
@@ -312,8 +312,8 @@ resolve_and_execute() {
             echo -e "  Personal: $local_personal"
             echo -e "  Work:     $local_work"
             echo ""
-            echo "  [p] Personal  ~/personal/projects/"
-            echo "  [W] Work      ~/work/projects/ (default)"
+            echo "  [p] Personal  $PERSONAL_DIR"
+            echo "  [W] Work      $WORK_DIR (default)"
             echo ""
             read -p "Choice (p/W): " choice
             case "$choice" in
@@ -323,8 +323,8 @@ resolve_and_execute() {
         else
             echo -e "${CYAN}Select project type for '${project_name}':${NC}"
             echo ""
-            echo "  [p] Personal  ~/personal/projects/"
-            echo "  [W] Work      ~/work/projects/ (default)"
+            echo "  [p] Personal  $PERSONAL_DIR"
+            echo "  [W] Work      $WORK_DIR (default)"
             echo ""
             read -p "Choice (p/W): " choice
             case "$choice" in
