@@ -384,7 +384,20 @@ resolve_and_execute() {
         *)
             record_access "$type" "$project_name"
             local continue_flag=""
-            $existing_project && continue_flag="--continue"
+            if $existing_project; then
+                # Check if a previous Claude conversation exists for this project.
+                # Claude stores conversations in ~/.claude/projects/<mangled-path>/
+                # To derive the mangled path, resolve the absolute path then replace
+                # non-alphanumeric chars (except -) with -, matching Claude's convention.
+                local abs_path
+                abs_path=$(cd "$project_path" 2>/dev/null && pwd)
+                local mangled
+                mangled=$(echo "$abs_path" | sed 's|[^a-zA-Z0-9-]|-|g')
+                local conv_dir="$HOME/.claude/projects/$mangled"
+                if [ -d "$conv_dir" ] && compgen -G "$conv_dir"/*.jsonl > /dev/null 2>&1; then
+                    continue_flag="--continue"
+                fi
+            fi
 
             if [ "$dashboard" = "true" ]; then
                 local cmd="cd $(printf '%q' "$project_path") && claude $continue_flag $chrome_flag"
