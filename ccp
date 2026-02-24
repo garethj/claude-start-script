@@ -390,7 +390,7 @@ resolve_and_execute() {
                 # To derive the mangled path, resolve the absolute path then replace
                 # non-alphanumeric chars (except -) with -, matching Claude's convention.
                 local abs_path
-                abs_path=$(cd "$project_path" 2>/dev/null && pwd)
+                abs_path=$(cd "$project_path" 2>/dev/null && pwd -P)
                 local mangled
                 mangled=$(echo "$abs_path" | sed 's|[^a-zA-Z0-9-]|-|g')
                 local conv_dir="$HOME/.claude/projects/$mangled"
