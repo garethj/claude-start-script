@@ -175,9 +175,9 @@ select_project() {
     if command -v fzf &> /dev/null; then
         local fzf_out
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="enter: claude  |  T: terminal  |  F: finder" \
+            --header="enter: claude  |  T: terminal  |  F: finder  |  R: refresh" \
             --color="header:dim" \
-            --expect="F,T")
+            --expect="F,T,R")
         key_pressed=$(echo "$fzf_out" | head -1)
         selected=$(echo "$fzf_out" | tail -n +2)
     else
@@ -218,7 +218,9 @@ select_project() {
     fi
 
     # Set action based on key pressed in fzf
-    if [ "$key_pressed" = "F" ]; then
+    if [ "$key_pressed" = "R" ]; then
+        MENU_ACTION="refresh"
+    elif [ "$key_pressed" = "F" ]; then
         MENU_ACTION="finder"
     elif [ "$key_pressed" = "T" ]; then
         MENU_ACTION="terminal"
@@ -432,6 +434,14 @@ if [ -z "$PROJECT_NAME" ]; then
             echo ""
             echo -e "${DIM}Exiting ccp dashboard.${NC}"
             break
+        fi
+
+        # Handle refresh: skip action and re-enter the loop
+        if [ "$MENU_ACTION" = "refresh" ]; then
+            PROJECT_NAME=""
+            TYPE="$TYPE_FILTER"
+            MENU_ACTION=""
+            continue
         fi
 
         # Use menu action (from fzf key press) if in default claude mode
