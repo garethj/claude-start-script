@@ -36,10 +36,31 @@ colorize_prefix() {
     sed -e "s/\[P\]/${blue_b}[P]${nc}/g" -e "s/\[W\]/${mag_b}[W]${nc}/g"
 }
 
-# Open a command in a new iTerm2 tab
-open_in_iterm_tab() {
+# Open a command in a new tab in the current terminal app.
+# Supports Ghostty, iTerm2, and Terminal.app. Returns 1 if unsupported.
+open_in_new_tab() {
     local cmd="$1"
-    osascript - "$cmd" <<'APPLESCRIPT'
+    case "${TERM_PROGRAM:-}" in
+        ghostty)
+            osascript - "$cmd" <<'APPLESCRIPT' 2>/dev/null
+on run argv
+    set cmd to item 1 of argv
+    tell application "Ghostty"
+        if (count windows) > 0 then
+            set newTab to new tab in front window with configuration (new surface configuration)
+            set term to terminal 1 of newTab
+        else
+            set win to new window with configuration (new surface configuration)
+            set term to terminal 1 of selected tab of win
+        end if
+        input text cmd to term
+        send key "enter" to term
+    end tell
+end run
+APPLESCRIPT
+            ;;
+        iTerm.app)
+            osascript - "$cmd" <<'APPLESCRIPT' 2>/dev/null
 on run argv
     set cmd to item 1 of argv
     tell application "iTerm2"
@@ -52,6 +73,24 @@ on run argv
     end tell
 end run
 APPLESCRIPT
+            ;;
+        Apple_Terminal)
+            osascript - "$cmd" <<'APPLESCRIPT' 2>/dev/null
+on run argv
+    set cmd to item 1 of argv
+    tell application "Terminal"
+        activate
+        tell front window
+            do script cmd in (make new tab with default settings)
+        end tell
+    end tell
+end run
+APPLESCRIPT
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # Show dashboard header
@@ -368,10 +407,10 @@ resolve_and_execute() {
             record_access "$type" "$project_name"
             if [ "$dashboard" = "true" ]; then
                 local cmd="cd $(printf '%q' "$project_path")"
-                if ! open_in_iterm_tab "$cmd"; then
-                    echo -e "${YELLOW}Failed to open iTerm2 tab. Is iTerm2 running?${NC}"
-                else
+                if open_in_new_tab "$cmd"; then
                     echo -e "${GREEN}Terminal tab opened:${NC} $project_name"
+                else
+                    cd "$project_path"
                 fi
             else
                 cd "$project_path"
@@ -405,10 +444,10 @@ resolve_and_execute() {
 
             if [ "$dashboard" = "true" ]; then
                 local cmd="cd $(printf '%q' "$project_path") && claude $continue_flag $chrome_flag"
-                if ! open_in_iterm_tab "$cmd"; then
-                    echo -e "${YELLOW}Failed to open iTerm2 tab. Is iTerm2 running?${NC}"
-                else
+                if open_in_new_tab "$cmd"; then
                     echo -e "${GREEN}Launched in new tab:${NC} $project_name"
+                else
+                    cd "$project_path" && claude $continue_flag $chrome_flag
                 fi
             else
                 cd "$project_path" && claude $continue_flag $chrome_flag
