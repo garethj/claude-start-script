@@ -214,7 +214,7 @@ select_project() {
     if command -v fzf &> /dev/null; then
         local fzf_out
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="enter/C: continue  |  N: new session  |  T: terminal  |  F: finder  |  R: refresh" \
+            --header="enter: continue  |  C: resume  |  N: new session  |  T: terminal  |  F: finder  |  R: refresh" \
             --color="header:dim" \
             --expect="F,T,R,N,C")
         key_pressed=$(echo "$fzf_out" | head -1)
@@ -265,6 +265,8 @@ select_project() {
         MENU_ACTION="terminal"
     elif [ "$key_pressed" = "N" ]; then
         MENU_ACTION="claude-new"
+    elif [ "$key_pressed" = "C" ]; then
+        MENU_ACTION="claude-resume"
     else
         MENU_ACTION="claude"
     fi
@@ -427,7 +429,9 @@ resolve_and_execute() {
         *)
             record_access "$type" "$project_name"
             local continue_flag=""
-            if $existing_project && [ "$action" != "claude-new" ]; then
+            if [ "$action" = "claude-resume" ]; then
+                continue_flag="--resume"
+            elif $existing_project && [ "$action" != "claude-new" ]; then
                 # Check if a previous Claude conversation exists for this project.
                 # Claude stores conversations in ~/.claude/projects/<mangled-path>/
                 # To derive the mangled path, resolve the absolute path then replace
