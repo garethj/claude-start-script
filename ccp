@@ -214,9 +214,9 @@ select_project() {
     if command -v fzf &> /dev/null; then
         local fzf_out
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="enter: continue  |  C: resume  |  N: new session  |  T: terminal  |  F: finder  |  R: refresh" \
+            --header="enter: new session  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh" \
             --color="header:dim" \
-            --expect="F,T,R,N,C")
+            --expect="F,T,R,C")
         key_pressed=$(echo "$fzf_out" | head -1)
         selected=$(echo "$fzf_out" | tail -n +2)
     else
@@ -263,8 +263,6 @@ select_project() {
         MENU_ACTION="finder"
     elif [ "$key_pressed" = "T" ]; then
         MENU_ACTION="terminal"
-    elif [ "$key_pressed" = "N" ]; then
-        MENU_ACTION="claude-new"
     elif [ "$key_pressed" = "C" ]; then
         MENU_ACTION="claude-resume"
     else
@@ -431,19 +429,6 @@ resolve_and_execute() {
             local continue_flag=""
             if [ "$action" = "claude-resume" ]; then
                 continue_flag="--resume"
-            elif $existing_project && [ "$action" != "claude-new" ]; then
-                # Check if a previous Claude conversation exists for this project.
-                # Claude stores conversations in ~/.claude/projects/<mangled-path>/
-                # To derive the mangled path, resolve the absolute path then replace
-                # non-alphanumeric chars (except -) with -, matching Claude's convention.
-                local abs_path
-                abs_path=$(cd "$project_path" 2>/dev/null && pwd -P)
-                local mangled
-                mangled=$(echo "$abs_path" | sed 's|[^a-zA-Z0-9-]|-|g')
-                local conv_dir="$HOME/.claude/projects/$mangled"
-                if [ -d "$conv_dir" ] && compgen -G "$conv_dir"/*.jsonl > /dev/null 2>&1; then
-                    continue_flag="--continue"
-                fi
             fi
 
             if [ "$dashboard" = "true" ]; then
