@@ -36,6 +36,13 @@ colorize_prefix() {
     sed -e "s/\[P\]/${blue_b}[P]${nc}/g" -e "s/\[W\]/${mag_b}[W]${nc}/g"
 }
 
+# Strip ANSI color codes, bullet markers, the separator line, and the
+# [P]/[W] prefix from a project list, leaving bare project names (one per
+# line) for exact-match comparisons.
+plain_project_names() {
+    sed -e 's/\x1b\[[0-9;]*m//g' -e 's/^● //' -e '/^─/d' -e 's/^\[[PW]\] //'
+}
+
 # Open a command in a new tab in the current terminal app.
 # Supports Ghostty, iTerm2, and Terminal.app. Returns 1 if unsupported.
 open_in_new_tab() {
@@ -210,15 +217,37 @@ select_project() {
     fi
 
     local selected
+    local query=""
     local key_pressed=""
+    local fzf_exit=0
     if command -v fzf &> /dev/null; then
         local fzf_out
+        local header_default="enter: open  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh"
+        local header_create_only="enter/P: new personal  |  W: new work"
+        local header_combined="enter/P: new personal  |  W: new work  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh"
+        local names_file
+        names_file=$(mktemp)
+        echo "$projects" | plain_project_names > "$names_file"
+
+        # 'result' (not 'change') fires once filtering for the current
+        # keystroke is actually done, so the header updates on the same
+        # keystroke that makes the query unique instead of lagging a key
+        # behind. The exact-name check (not fuzzy match count) is what
+        # decides whether "create new" applies, since fuzzy search can still
+        # highlight an unrelated project even when no exact match exists —
+        # in that case C/T/F/R still act on the highlighted item, so both
+        # sets of hints are shown together (header_combined).
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
-            --header="enter: new session  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh" \
+            --header="$header_default" \
+            --bind="result:transform-header:if [ -n {q} ] && ! grep -qxF -- {q} '$names_file'; then if [ \$FZF_MATCH_COUNT -eq 0 ]; then echo '$header_create_only'; else echo '$header_combined'; fi; else echo '$header_default'; fi" \
             --color="header:dim" \
-            --expect="F,T,R,C")
-        key_pressed=$(echo "$fzf_out" | head -1)
-        selected=$(echo "$fzf_out" | tail -n +2)
+            --print-query \
+            --expect="F,T,R,C,P,W")
+        fzf_exit=$?
+        rm -f "$names_file"
+        query=$(echo "$fzf_out" | head -1)
+        key_pressed=$(echo "$fzf_out" | sed -n '2p')
+        selected=$(echo "$fzf_out" | tail -n +3)
     else
         # Use markers for non-fzf display
         local projects_marked
@@ -239,6 +268,25 @@ select_project() {
 
     # Strip ANSI escape codes for parsing
     selected=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g')
+
+    # If the typed query doesn't exactly match an existing project name,
+    # treat Enter/P/W as "create new" — even if fuzzy search is still
+    # highlighting some unrelated existing project. fzf_exit -eq 130
+    # (Esc/Ctrl-C) is excluded so cancelling never creates a project.
+    local trimmed_query
+    trimmed_query="$(echo "$query" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ -n "$trimmed_query" ] && [ "$fzf_exit" -ne 130 ] \
+        && { [ -z "$key_pressed" ] || [ "$key_pressed" = "P" ] || [ "$key_pressed" = "W" ]; } \
+        && ! echo "$projects" | plain_project_names | grep -qxF -- "$trimmed_query"; then
+        PROJECT_NAME="$trimmed_query"
+        if [ "$key_pressed" = "W" ]; then
+            TYPE="work"
+        else
+            TYPE="personal"
+        fi
+        MENU_ACTION="claude"
+        return 0
+    fi
 
     # Handle separator selection or empty
     if [ -z "$selected" ] || [[ "$selected" == ─* ]]; then
