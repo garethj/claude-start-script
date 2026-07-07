@@ -223,8 +223,8 @@ select_project() {
     if command -v fzf &> /dev/null; then
         local fzf_out
         local header_default="enter: open  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh"
-        local header_create_only="enter/P: new personal  |  W: new work"
-        local header_combined="enter/P: new personal  |  W: new work  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh"
+        local header_create_only="P: new personal  |  W: new work"
+        local header_combined="enter: open  |  P: new personal  |  W: new work  |  C: continue  |  T: terminal  |  F: finder  |  R: refresh"
         local names_file
         names_file=$(mktemp)
         echo "$projects" | plain_project_names > "$names_file"
@@ -232,14 +232,20 @@ select_project() {
         # 'result' (not 'change') fires once filtering for the current
         # keystroke is actually done, so the header updates on the same
         # keystroke that makes the query unique instead of lagging a key
-        # behind. The exact-name check (not fuzzy match count) is what
-        # decides whether "create new" applies, since fuzzy search can still
-        # highlight an unrelated project even when no exact match exists —
-        # in that case C/T/F/R still act on the highlighted item, so both
-        # sets of hints are shown together (header_combined).
+        # behind. FZF_MATCH_COUNT (not just the exact-name check) decides
+        # which header to show: with zero matches there's nothing for Enter
+        # to open, so only P/W are offered (header_create_only); with a
+        # fuzzy match highlighted, Enter opens it and P/W still force-create
+        # (header_combined). Enter itself never creates a project.
+        #
+        # The enter key itself is rebound so that with zero matches ({} is
+        # empty — nothing is highlighted to accept) it's a true no-op inside
+        # fzf: no exit, query/cursor untouched. With a match highlighted it
+        # falls back to fzf's normal accept behavior.
         fzf_out=$(echo "$projects" | fzf --ansi --prompt="Select project: " --height=80% --reverse --no-sort \
             --header="$header_default" \
             --bind="result:transform-header:if [ -n {q} ] && ! grep -qxF -- {q} '$names_file'; then if [ \$FZF_MATCH_COUNT -eq 0 ]; then echo '$header_create_only'; else echo '$header_combined'; fi; else echo '$header_default'; fi" \
+            --bind="enter:transform:[[ -n {} ]] && echo accept || echo ignore" \
             --color="header:dim" \
             --print-query \
             --expect="F,T,R,C,P,W")
@@ -269,14 +275,17 @@ select_project() {
     # Strip ANSI escape codes for parsing
     selected=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g')
 
-    # If the typed query doesn't exactly match an existing project name,
-    # treat Enter/P/W as "create new" — even if fuzzy search is still
-    # highlighting some unrelated existing project. fzf_exit -eq 130
-    # (Esc/Ctrl-C) is excluded so cancelling never creates a project.
+    # Only P/W create a new project — Enter always means "open whatever
+    # fzf has highlighted" (or nothing, if there's no match), never create.
+    # fzf_exit -eq 130 (Esc/Ctrl-C) is excluded so cancelling never creates.
+    local force_create=false
+    if [ "$key_pressed" = "P" ] || [ "$key_pressed" = "W" ]; then
+        force_create=true
+    fi
+
     local trimmed_query
     trimmed_query="$(echo "$query" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    if [ -n "$trimmed_query" ] && [ "$fzf_exit" -ne 130 ] \
-        && { [ -z "$key_pressed" ] || [ "$key_pressed" = "P" ] || [ "$key_pressed" = "W" ]; } \
+    if [ -n "$trimmed_query" ] && [ "$fzf_exit" -ne 130 ] && $force_create \
         && ! echo "$projects" | plain_project_names | grep -qxF -- "$trimmed_query"; then
         PROJECT_NAME="$trimmed_query"
         if [ "$key_pressed" = "W" ]; then
