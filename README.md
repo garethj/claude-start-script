@@ -43,7 +43,7 @@ Run `ccp` with no project name to enter a persistent dashboard. It shows a menu 
 
 With fzf installed, you get extra key bindings:
 
-- **Enter**: Launch Claude Code (or create a new personal project if your search matches nothing)
+- **Enter**: Launch Claude Code for whatever project fzf has highlighted. Never creates a project — it's a no-op if your search matches nothing.
 - **P**: Create a new personal project from the search text
 - **W**: Create a new work project from the search text
 - **C**: Continue (resume) the previous conversation
@@ -55,7 +55,7 @@ With fzf installed, you get extra key bindings:
 
 If you name a project that doesn't exist, `ccp` creates the directory and starts a fresh Claude Code session. If you don't specify `-p` or `-w`, it asks you to choose.
 
-In the dashboard's fzf picker, typing a name that doesn't match any existing project and pressing **Enter** or **P** creates it as a personal project; pressing **W** creates it as a work project — regardless of whether the dashboard is currently filtered to `-p` or `-w`.
+In the dashboard's fzf picker, typing a name that doesn't match any existing project and pressing **P** creates it as a personal project; pressing **W** creates it as a work project — regardless of whether the dashboard is currently filtered to `-p` or `-w`. Enter only opens an existing highlighted match; it never creates.
 
 ## Configuration
 
